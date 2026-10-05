@@ -5,5 +5,8 @@ dist/
 .DS_Store
 .env
 .env.local
+.vercel
+web/.next
+web/out
 # Generated PNGs (decoded from assets/*.png.b64 at build/dev time)
 assets/*.png
