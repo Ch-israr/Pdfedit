@@ -1,0 +1,1 @@
+{"$schema":"https://openapi.vercel.sh/vercel.json","functions":{"api/auth.py":{"maxDuration":30,"runtime":"@vercel/python@4.5.0"},"api/health.py":{"maxDuration":10,"runtime":"@vercel/python@4.5.0"},"api/process.py":{"maxDuration":60,"runtime":"@vercel/python@4.5.0"},"api/usage.py":{"maxDuration":10,"runtime":"@vercel/python@4.5.0"}}}

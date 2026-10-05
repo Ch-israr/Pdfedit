@@ -1,0 +1,11 @@
+# PDF processing
+pypdf>=4.0
+Pillow>=10.0
+pdf2docx>=0.5.6
+
+# Database (Supabase Postgres via PostgREST — no connection pooling issues on serverless)
+supabase>=2.0
+
+# Auth / security
+PyJWT>=2.8
+bcrypt>=4.0
