@@ -24,6 +24,7 @@ More DocForge tools (Word→PDF, OCR, images, QR…) can be added by extending
 
 ```bash
 npm install
+npm run assets   # decode icon/splash PNGs (stored base64-encoded in assets/*.png.b64)
 ```
 
 Point the app at your backend (default is `https://api.pdfedit.app`):
