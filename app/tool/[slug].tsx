@@ -19,14 +19,17 @@ import {
   submitJob,
   type JobStatus,
   type PickedFile,
+  validatePdfFiles,
 } from "../../src/api/client";
 import {
   Button,
   Card,
   COLORS,
   ProgressBar,
+  StepIndicator,
   Subtitle,
   Title,
+  FilePreview,
 } from "../../src/components/ui";
 import { TOOL_MAP } from "../../src/tools";
 
@@ -59,6 +62,37 @@ export default function ToolScreen() {
     );
   }
 
+  const currentStep = files.length === 0 ? 0 : job ? 3 : 1;
+
+  function parseRanges(raw: string): string[] {
+    if (!raw.trim()) return [];
+    return raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+
+  function validateForm(): string | null {
+    const pdfValidation = validatePdfFiles(files);
+    if (pdfValidation) return pdfValidation;
+
+    if (tool.slug === "split-pdf") {
+      if (splitMode === "ranges") {
+        const parts = parseRanges(ranges);
+        if (parts.length === 0) {
+          return "Specify at least one page range like 1-3, 5, 8-10.";
+        }
+        for (const part of parts) {
+          if (!/^\d+(?:-\d+)?$/.test(part)) {
+            return "Ranges must use a format like 1-3, 5, 8-10.";
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
   async function pickFiles() {
     const res = await DocumentPicker.getDocumentAsync({
       type: tool.accept,
@@ -66,13 +100,13 @@ export default function ToolScreen() {
       copyToCacheDirectory: true,
     });
     if (res.canceled) return;
-    setFiles(
-      res.assets.map((a) => ({
-        uri: a.uri,
-        name: a.name,
-        mimeType: a.mimeType,
-      }))
-    );
+    const nextFiles = (res.assets ?? []).map((asset) => ({
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType,
+      size: typeof asset.size === "number" ? asset.size : undefined,
+    }));
+    setFiles(nextFiles);
     setJob(null);
     setError("");
   }
@@ -98,10 +132,21 @@ export default function ToolScreen() {
   }
 
   async function run() {
-    if (files.length === 0) return;
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    if (files.length === 0) {
+      setError("Choose a PDF file before continuing.");
+      return;
+    }
+
     setBusy(true);
     setError("");
     setJob(null);
+
     try {
       const { job_id } = await submitJob(tool.slug, files, options());
       pollRef.current = setInterval(async () => {
@@ -150,44 +195,52 @@ export default function ToolScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ title: tool.name }} />
-      <ScrollView style={styles.container}>
-        <Title>
-          {tool.icon} {tool.name}
-        </Title>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <Title>{tool.icon} {tool.name}</Title>
         <Subtitle>{tool.tagline}</Subtitle>
 
+        <StepIndicator
+          currentStep={currentStep}
+          totalSteps={4}
+          labels={["Choose", "Options", "Process", "Download"]}
+        />
+
         <Card>
-          <Button title={files.length ? "Change files" : "Choose PDF files"} onPress={pickFiles} />
-          {files.map((f, i) => (
-            <View key={`${f.uri}-${i}`} style={styles.fileRow}>
-              <Text style={styles.fileName} numberOfLines={1}>
-                {i + 1}. {f.name}
-              </Text>
-              <View style={styles.fileActions}>
-                {tool.multiple && (
-                  <>
-                    <Pressable onPress={() => moveFile(i, -1)} style={styles.mini}>
-                      <Text style={styles.miniText}>↑</Text>
-                    </Pressable>
-                    <Pressable onPress={() => moveFile(i, 1)} style={styles.mini}>
-                      <Text style={styles.miniText}>↓</Text>
-                    </Pressable>
-                  </>
-                )}
-                <Pressable
-                  onPress={() => setFiles((p) => p.filter((_, j) => j !== i))}
-                  style={styles.mini}
-                >
-                  <Text style={styles.miniText}>✕</Text>
-                </Pressable>
-              </View>
+          <Text style={styles.label}>Step 1: Upload a PDF</Text>
+          <Button
+            title={files.length ? "Choose different files" : "Browse PDF files"}
+            onPress={pickFiles}
+            icon="📎"
+          />
+          {files.length === 0 && (
+            <Text style={styles.helperText}>Only PDF files are supported. Large files are validated before processing.</Text>
+          )}
+          {files.map((file, index) => (
+            <View key={`${file.uri}-${index}`}>
+              <FilePreview
+                index={index}
+                total={files.length}
+                name={file.name}
+                size={file.size}
+                onRemove={() => setFiles((prev) => prev.filter((_, i) => i !== index))}
+              />
+              {tool.multiple && (
+                <View style={styles.fileActions}>
+                  <Pressable onPress={() => moveFile(index, -1)} style={styles.miniButton}>
+                    <Text style={styles.miniText}>↑</Text>
+                  </Pressable>
+                  <Pressable onPress={() => moveFile(index, 1)} style={styles.miniButton}>
+                    <Text style={styles.miniText}>↓</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           ))}
         </Card>
 
         {tool.slug === "split-pdf" && (
           <Card>
-            <Text style={styles.label}>Split mode</Text>
+            <Text style={styles.label}>Step 2: Choose split mode</Text>
             <View style={styles.choiceRow}>
               {(["ranges", "single"] as const).map((m) => (
                 <Pressable
@@ -203,12 +256,12 @@ export default function ToolScreen() {
             </View>
             {splitMode === "ranges" && (
               <>
-                <Text style={styles.label}>Ranges (e.g. 1-3, 5, 8-10)</Text>
+                <Text style={styles.label}>Pages to keep</Text>
                 <TextInput
                   style={styles.input}
                   value={ranges}
                   onChangeText={setRanges}
-                  placeholder="1-3, 5"
+                  placeholder="1-3, 5, 8-10"
                   placeholderTextColor={COLORS.muted}
                 />
               </>
@@ -218,15 +271,15 @@ export default function ToolScreen() {
 
         {tool.slug === "compress-pdf" && (
           <Card>
-            <Text style={styles.label}>Compression level</Text>
+            <Text style={styles.label}>Step 2: Compression level</Text>
             <View style={styles.choiceRow}>
-              {["low", "medium", "high"].map((l) => (
+              {["low", "medium", "high"].map((levelOption) => (
                 <Pressable
-                  key={l}
-                  onPress={() => setLevel(l)}
-                  style={[styles.choice, level === l && styles.choiceActive]}
+                  key={levelOption}
+                  onPress={() => setLevel(levelOption)}
+                  style={[styles.choice, level === levelOption && styles.choiceActive]}
                 >
-                  <Text style={styles.choiceText}>{l[0].toUpperCase() + l.slice(1)}</Text>
+                  <Text style={styles.choiceText}>{levelOption[0].toUpperCase() + levelOption.slice(1)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -234,16 +287,17 @@ export default function ToolScreen() {
         )}
 
         {!!error && (
-          <Card>
+          <Card variant="danger">
             <Text style={styles.error}>{error}</Text>
           </Card>
         )}
 
         <Button
-          title={busy ? "Working…" : `Run ${tool.name}`}
+          title={busy ? "Working…" : `Process ${tool.name}`}
           onPress={run}
           disabled={files.length === 0 || busy}
           loading={busy}
+          icon="⚙️"
         />
 
         {job && (job.status === "pending" || job.status === "processing") && (
@@ -256,9 +310,9 @@ export default function ToolScreen() {
         )}
 
         {job?.status === "completed" && (
-          <Card>
-            <Text style={styles.ok}>Done — your file is ready.</Text>
-            <Button title="Download / Share result" onPress={saveResult} />
+          <Card variant="success">
+            <Text style={styles.ok}>Your file is ready. Download or share it below.</Text>
+            <Button title="Download / Share result" onPress={saveResult} icon="⬇️" />
           </Card>
         )}
       </ScrollView>
@@ -269,31 +323,28 @@ export default function ToolScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   container: { flex: 1, padding: 16 },
-  label: { color: COLORS.muted, fontSize: 13, marginTop: 8, marginBottom: 4 },
+  contentContainer: { paddingBottom: 32 },
+  label: { color: COLORS.textSecondary, fontSize: 13, marginTop: 4, marginBottom: 6, fontWeight: "600" },
+  helperText: { color: COLORS.muted, marginTop: 8, fontSize: 12, lineHeight: 18 },
   input: {
-    backgroundColor: COLORS.bg,
+    backgroundColor: "#0f172a",
     borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 10,
     color: COLORS.text,
     padding: 12,
     fontSize: 16,
+    marginTop: 8,
   },
-  fileRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  fileActions: { flexDirection: "row", marginTop: 8 },
+  miniButton: {
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  fileName: { flex: 1, color: COLORS.text, fontSize: 14 },
-  fileActions: { flexDirection: "row" },
-  mini: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginLeft: 4,
-    backgroundColor: COLORS.bg,
+    backgroundColor: "#0f172a",
+    borderWidth: 1,
+    borderColor: COLORS.border,
     borderRadius: 8,
+    marginRight: 8,
   },
   miniText: { color: COLORS.text, fontSize: 14 },
   choiceRow: { flexDirection: "row", gap: 8, marginTop: 4 },
@@ -304,10 +355,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: "center",
+    backgroundColor: "#0f172a",
   },
   choiceActive: { borderColor: COLORS.accent, backgroundColor: "#0c2a3d" },
   choiceText: { color: COLORS.text, fontWeight: "600" },
-  error: { color: COLORS.danger },
-  ok: { color: COLORS.success, marginBottom: 8, fontSize: 15 },
-  statusText: { color: COLORS.text, fontSize: 15, marginBottom: 4 },
+  error: { color: COLORS.danger, fontSize: 14, fontWeight: "600" },
+  ok: { color: COLORS.success, marginBottom: 8, fontSize: 15, fontWeight: "600" },
+  statusText: { color: COLORS.text, fontSize: 15, marginBottom: 6, fontWeight: "600" },
 });

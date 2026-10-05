@@ -12,6 +12,7 @@ export default function RootLayout() {
           headerTintColor: COLORS.text,
           headerTitleStyle: { fontWeight: "800" },
           contentStyle: { backgroundColor: COLORS.bg },
+          animation: "slide_from_right",
         }}
       >
         <Stack.Screen name="index" options={{ title: "pdfedit" }} />

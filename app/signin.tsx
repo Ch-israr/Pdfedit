@@ -1,7 +1,10 @@
 import { Stack } from "expo-router";
 import React, { useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,7 +13,7 @@ import {
 import { login, register } from "../src/api/client";
 import { Button, Card, COLORS, Subtitle, Title } from "../src/components/ui";
 
-type Phase = "idle" | "options" | "working" | "done" | "error";
+type Phase = "idle" | "working" | "done" | "error";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -35,70 +38,73 @@ export default function SignIn() {
   return (
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ title: mode === "login" ? "Sign in" : "Create account" }} />
-      <View style={styles.container}>
-        <Title>{mode === "login" ? "Welcome back" : "Create your account"}</Title>
-        <Subtitle>
-          {mode === "login"
-            ? "Sign in to unlock premium limits."
-            : "Free accounts get 5 tasks a day."}
-        </Subtitle>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.container}>
+          <Title>{mode === "login" ? "Welcome back" : "Create your account"}</Title>
+          <Subtitle>
+            {mode === "login"
+              ? "Sign in to unlock premium limits and keep your workflow synced."
+              : "Free accounts can get started quickly and upgrade when needed."}
+          </Subtitle>
 
-        <Card>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            placeholderTextColor={COLORS.muted}
-          />
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="••••••••"
-            placeholderTextColor={COLORS.muted}
-          />
-          {!!error && <Text style={styles.error}>{error}</Text>}
+          <Card>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholder="you@example.com"
+              placeholderTextColor={COLORS.muted}
+            />
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              placeholder="••••••••"
+              placeholderTextColor={COLORS.muted}
+            />
+
+            {!!error && <Text style={styles.error}>{error}</Text>}
+            {phase === "done" && <Text style={styles.ok}>Done — you're signed in.</Text>}
+
+            <Button
+              title={mode === "login" ? "Sign in" : "Create account"}
+              onPress={submit}
+              loading={phase === "working"}
+              disabled={!email || !password}
+              icon="🔐"
+            />
+          </Card>
+
           <Button
-            title={mode === "login" ? "Sign in" : "Create account"}
-            onPress={submit}
-            loading={phase === "working"}
-            disabled={!email || !password}
+            title={mode === "login" ? "No account? Register instead" : "Have an account? Sign in instead"}
+            variant="secondary"
+            onPress={() => {
+              setMode(mode === "login" ? "register" : "login");
+              setError("");
+              setPhase("idle");
+            }}
           />
-          {phase === "done" && (
-            <Text style={styles.ok}>Done — you're signed in.</Text>
-          )}
-        </Card>
-
-        <Button
-          title={
-            mode === "login"
-              ? "No account? Register instead"
-              : "Have an account? Sign in instead"
-          }
-          variant="secondary"
-          onPress={() => {
-            setMode(mode === "login" ? "register" : "login");
-            setError("");
-            setPhase("idle");
-          }}
-        />
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-  container: { flex: 1, padding: 16 },
-  label: { color: COLORS.muted, fontSize: 13, marginTop: 12, marginBottom: 4 },
+  keyboardAvoider: { flex: 1 },
+  container: { flexGrow: 1, padding: 16, justifyContent: "center" },
+  label: { color: COLORS.muted, fontSize: 13, marginTop: 12, marginBottom: 4, fontWeight: "600" },
   input: {
-    backgroundColor: COLORS.bg,
+    backgroundColor: "#0f172a",
     borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 10,
@@ -106,6 +112,6 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
   },
-  error: { color: COLORS.danger, marginTop: 10 },
-  ok: { color: COLORS.success, marginTop: 10 },
+  error: { color: COLORS.danger, marginTop: 12, fontWeight: "600" },
+  ok: { color: COLORS.success, marginTop: 12, fontWeight: "600" },
 });
